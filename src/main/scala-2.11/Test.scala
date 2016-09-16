@@ -15,6 +15,8 @@ import java.io.FileOutputStream
 import java.io.ObjectInputStream
 import java.io.ObjectOutputStream
 import java.io.Serializable
+import sql._
+
 
 import com.sun.org.apache.xalan.internal.utils.XMLSecurityPropertyManager.Property
 import org.postgresql.util.PGobject
@@ -43,47 +45,13 @@ object Test {
 
     val newDataPath = "/home/qjb/DATA/totalDataPath/"
 
+    val sqlCmdInstant = new sqlCmd()
+
     case class userData(zhihuId: String, topic: String, lineNumber: Long)
     Class.forName("org.postgresql.Driver")
     ConnectionPool.singleton("jdbc:postgresql://localhost:5432/zhihudb", "dbuser", "admin")
 
     implicit val session = AutoSession
-
-    def userIsExist(userId: String): Boolean = {
-      val res = sql"""
-                      SELECT * FROM userMaxDataLength WHERE zhihuid = $userId
-                      """.map(rs => rs.string("zhihuid")).list().apply()
-      if(res.length == 1) true else false
-    }
-
-    def isLonger(userId: String,lineLength: Long): Boolean = {
-      val res = sql"""
-                      SELECT * FROM userMaxDataLength WHERE zhihuid = $userId and linelength < $lineLength
-                   """.map(rs => rs.string("zhihuid")).list().apply()
-      if(res.length == 1) true else false
-    }
-
-    def insertUser(userId: String,name: String,numberIndex: Long,lineLength: Long) = {
-      sql"""
-            INSERT INTO userMaxDataLength VALUES($userId,$name,$numberIndex,$lineLength)
-            """.execute().apply()
-    }
-
-    def updateLineLength(userId: String,name: String,numberIndex: Long,lineLength: Long): Unit = {
-      sql"""
-            UPDATE userMaxDataLength SET topicName = $name , lineNumber = $numberIndex, lineLength = $lineLength
-            WHERE zhihuid = $userId
-            """.execute().apply()
-    }
-
-    def whereIsData(zhihuId: String):(String,Long) = {
-      val res =
-        sql"""
-              SELECT * FROM userMaxDataLength WHERE zhihuId = $zhihuId
-          """.map(rs => (rs.string("topicname"),rs.long("linenumber"))).list().apply()
-
-      if(res.length == 1) res(0) else ("0",0)
-    }
 
     def processData() = {
       val currentDataDir = "/home/qjb/DATA/topics/"
@@ -105,7 +73,7 @@ object Test {
         numberIndex += 1
         */
           val userId = (parse(line) \ "id").values.toString()
-          val dataLocation = whereIsData(userId)
+          val dataLocation = sqlCmdInstant.whereIsData(userId)
           if (dataLocation == ("0", 0)) throw new RuntimeException("user not found")
           val data = new File(currentDataDir + dataLocation._1)
           val dataLine = Source.fromFile(currentDataDir + dataLocation._1)
@@ -120,13 +88,10 @@ object Test {
     implicit val farmat = DefaultFormats
     import scala.collection.mutable.ListBuffer
 
-    case class zhihuSimplifyData(zhihuId: String, topicName: String, lineNumber: Long)
-    val dataSerializable = new mutable.HashMap[String,String]()
 
-    val allData: List[zhihuSimplifyData] = sql"""
-                                                 SELECT * FROM userMaxDataLength
-                                                 """.map(rs => zhihuSimplifyData(rs.string("zhihuid"),rs.string("topicname"),rs.long("linenumber"))).list().apply()
+    val dataSerializable = new mutable.HashMap[String,(List[Long],List[Long],List[Long])]()
 
+    val allData: List[zhihuSimplifyData] = sqlCmdInstant.getAllDataFromUserMaxDataLength()
     val topicLines = allData.map(x => (x.topicName,x.lineNumber)).groupBy(_._1).map(x => (x._1,x._2.map(_._2)))
 
     topicLines.foreach( x => {
@@ -148,7 +113,7 @@ object Test {
         for (data <- userData.VOTEUPED_ARTICLES) {
           votupArticles.append(data.id)
         }
-        val value = compact(render((followedQuestionsId.toList, votupAnswers.toList, votupArticles.toList).toString()))
+        val value = (followedQuestionsId.toList, votupAnswers.toList, votupArticles.toList)
         dataSerializable += (userId -> value)
       }
       }
