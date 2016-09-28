@@ -12,5 +12,9 @@ libraryDependencies ++= Seq("org.scalikejdbc" %% "scalikejdbc" % "2.4.+",
                             "com.h2database" % "h2" % "1.4.+",
                             "ch.qos.logback" % "logback-classic" % "1.1.+")
 
+libraryDependencies += "com.typesafe.akka" %% "akka-http-experimental" % "2.4.10"
+
+libraryDependencies += "com.esotericsoftware" % "kryo" % "4.0.0"
+
 import com.trueaccord.scalapb.{ScalaPbPlugin => PB}
 PB.protobufSettings
